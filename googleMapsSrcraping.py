@@ -1,30 +1,35 @@
 import os
+import time
+from bs4 import BeautifulSoup
+from fpdf import FPDF
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from fpdf import FPDF
-import time
+from openpyxl import Workbook
 
 # Função para garantir que o texto seja codificado corretamente
 def safe_text(text):
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 # Configurar o Selenium WebDriver
-options = webdriver.ChromeOptions()
+options = Options()
 # Remover a linha abaixo para não executar em modo headless
 # options.add_argument('--headless')  # Executa o Chrome em modo headless (sem abrir o navegador)
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 # URL do site com as avaliações
-url = 'https://www.google.com/maps/place/Hospital+Erasto+Gaertner/@-25.4402428,-49.2480384,15z/data=!4m18!1m9!3m8!1s0x94dce45382833a69:0xbcacc1ec0b2350db!2sHospital+S%C3%A3o+Marcelino+Champagnat!8m2!3d-25.4359584!4d-49.246138!9m1!1b1!16s%2Fg%2F11gzk88zh!3m7!1s0x94dce51c1ddbe78f:0x88fdecec6e651de7!8m2!3d-25.4533705!4d-49.238806!9m1!1b1!16s%2Fg%2F1yfjkzz97?entry=ttu&g_ep=EgoyMDI0MDkwOC4wIKXMDSoASAFQAw%3D%3D'
+url = 'https://www.google.com/maps/place/Hospital+Erasto+Gaertner/@-25.4533705,-49.238806,17z/data=!4m8!3m7!1s0x94dce51c1ddbe78f:0x88fdecec6e651de7!8m2!3d-25.4533705!4d-49.238806!9m1!1b1!16s%2Fg%2F1yfjkzz97?entry=ttu&g_ep=EgoyMDI0MDkxNS4wIKXMDSoASAFQAw%3D%3D'
 
 # Acessar a página
 driver.get(url)
 time.sleep(5)  # Esperar o carregamento inicial da página
 
 # Definir o limite de avaliações
-limite_avaliacoes = 8  # Coloque aqui o número máximo de avaliações que você deseja capturar
+limite_avaliacoes = 351  # Coloque aqui o número máximo de avaliações que você deseja capturar
 
 # Lista para armazenar todas as avaliações
 avaliacoes = []
@@ -51,12 +56,15 @@ while len(avaliacoes) < limite_avaliacoes:
 pdf = FPDF()
 pdf.set_auto_page_break(auto=True, margin=15)
 pdf.add_page()
-
-# Definir a fonte
 pdf.set_font("Arial", size=12)
 
-# Contador de avaliações processadas
-contador_avaliacoes = 0
+# Criar um objeto Workbook para o Excel
+wb = Workbook()
+ws = wb.active
+ws.title = "Avaliações"
+
+# Adicionar cabeçalhos ao Excel
+ws.append(["Nome", "Nota", "Data", "Comentário", "Resposta da Empresa"])
 
 # Percorrer as avaliações e extrair as informações (limitando ao número desejado)
 for avaliacao in avaliacoes[:limite_avaliacoes]:  # Limitar ao número máximo de avaliações
@@ -86,24 +94,41 @@ for avaliacao in avaliacoes[:limite_avaliacoes]:  # Limitar ao número máximo d
     except:
         comentario = 'Comentário não encontrado'
 
+    try:
+        # Data do comentário
+        data_comentario = avaliacao.find_element(By.CLASS_NAME, 'rsqaWe').text.strip()
+    except:
+        data_comentario = 'Data não encontrada'
+
+    try:
+        # Resposta da empresa
+        resposta_empresa = avaliacao.find_element(By.XPATH, './/div[contains(@class, "wiI7pd")]').text.strip()
+    except:
+        resposta_empresa = 'Resposta não encontrada'
+
     # Escrever no PDF (convertendo o texto para o encoding correto)
     pdf.cell(200, 10, txt=safe_text(f"Nome: {nome}"), ln=True, align='L')
     pdf.cell(200, 10, txt=safe_text(f"Nota: {nota}"), ln=True, align='L')
+    pdf.cell(200, 10, txt=safe_text(f"Data: {data_comentario}"), ln=True, align='L')
     pdf.multi_cell(200, 10, txt=safe_text(f"Comentário: {comentario}"), align='L')
+    pdf.multi_cell(200, 10, txt=safe_text(f"Resposta da empresa: {resposta_empresa}"), align='L')
     pdf.cell(200, 10, txt=safe_text('-' * 40), ln=True, align='L')
 
-    # Incrementar o contador de avaliações processadas
-    contador_avaliacoes += 1
+    # Adicionar os dados ao Excel
+    ws.append([nome, nota, data_comentario, comentario, resposta_empresa])
 
 # Caminho para salvar o arquivo na área de trabalho
-desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "avaliacoes.pdf")
+desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
 
 # Salvar o PDF na área de trabalho
-pdf.output(desktop_path)
-print(f"PDF salvo com sucesso em: {desktop_path}")
+pdf_path = os.path.join(desktop_path, "avaliacoes.pdf")
+pdf.output(pdf_path)
+print(f"PDF salvo com sucesso em: {pdf_path}")
 
-# Imprimir o total de avaliações processadas
-print(f"Total de avaliações processadas: {contador_avaliacoes}")
+# Salvar o Excel na área de trabalho
+excel_path = os.path.join(desktop_path, "avaliacoes.xlsx")
+wb.save(excel_path)
+print(f"Excel salvo com sucesso em: {excel_path}")
 
 # Fechar o navegador
 driver.quit()
