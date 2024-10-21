@@ -29,7 +29,7 @@ driver.get(url)
 time.sleep(5)  # Esperar o carregamento inicial da página
 
 # Definir o limite de avaliações
-limite_avaliacoes = 351  # Coloque aqui o número máximo de avaliações que você deseja capturar
+limite_avaliacoes = 2  # Coloque aqui o número máximo de avaliações que você deseja capturar
 
 # Lista para armazenar todas as avaliações
 avaliacoes = []
@@ -71,7 +71,7 @@ for avaliacao in avaliacoes[:limite_avaliacoes]:  # Limitar ao número máximo d
     try:
         # Clique no botão "Mais" se ele estiver presente
         try:
-            mais_button = avaliacao.find_element(By.CLASS_NAME, 'w8nwRe')  # Classe do botão "Mais"
+            mais_button = avaliacao.find_element(By.CLASS_NAME, 'w8nwRe.kyuRq')  # Classe do botão "Mais"
             mais_button.click()
             time.sleep(1)  # Esperar um momento para o texto expandido ser carregado
         except:
@@ -118,7 +118,7 @@ for avaliacao in avaliacoes[:limite_avaliacoes]:  # Limitar ao número máximo d
     ws.append([nome, nota, data_comentario, comentario, resposta_empresa])
 
 # Caminho para salvar o arquivo na área de trabalho
-desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "Área de Trabalho")
 
 # Salvar o PDF na área de trabalho
 pdf_path = os.path.join(desktop_path, "avaliacoes.pdf")
