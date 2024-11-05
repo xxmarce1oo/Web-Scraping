@@ -22,14 +22,13 @@ options = Options()
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 # URL do site com as avaliações
-url = 'https://www.google.com/maps/place/Hospital+Erasto+Gaertner/@-25.4533705,-49.238806,17z/data=!4m8!3m7!1s0x94dce51c1ddbe78f:0x88fdecec6e651de7!8m2!3d-25.4533705!4d-49.238806!9m1!1b1!16s%2Fg%2F1yfjkzz97?entry=ttu&g_ep=EgoyMDI0MDkxNS4wIKXMDSoASAFQAw%3D%3D'
-
+url = 'https://www.google.com/maps/place/Hospital+de+Cl%C3%ADnicas/@-25.4241557,-49.2645227,17z/data=!4m8!3m7!1s0x94dce43e77959da7:0x725e3a407b4e2f45!8m2!3d-25.4241606!4d-49.2619478!9m1!1b1!16s%2Fg%2F1tdzbklv?entry=ttu&g_ep=EgoyMDI0MTAyMy4wIKXMDSoASAFQAw%3D%3D'
 # Acessar a página
 driver.get(url)
 time.sleep(5)  # Esperar o carregamento inicial da página
 
 # Definir o limite de avaliações
-limite_avaliacoes = 2  # Coloque aqui o número máximo de avaliações que você deseja capturar
+limite_avaliacoes = 350  # Coloque aqui o número máximo de avaliações que você deseja capturar
 
 # Lista para armazenar todas as avaliações
 avaliacoes = []
@@ -117,16 +116,20 @@ for avaliacao in avaliacoes[:limite_avaliacoes]:  # Limitar ao número máximo d
     # Adicionar os dados ao Excel
     ws.append([nome, nota, data_comentario, comentario, resposta_empresa])
 
-# Caminho para salvar o arquivo na área de trabalho
-desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "Área de Trabalho")
+# Caminho para salvar o arquivo na pasta Documentos
+documents_path = os.path.join(os.path.expanduser("~"), "Documents")
 
-# Salvar o PDF na área de trabalho
-pdf_path = os.path.join(desktop_path, "avaliacoes.pdf")
+# Verificar se o diretório existe, se não, criar
+if not os.path.exists(documents_path):
+    os.makedirs(documents_path)
+
+# Salvar o PDF na pasta Documentos
+pdf_path = os.path.join(documents_path, "avaliacoes.pdf")
 pdf.output(pdf_path)
 print(f"PDF salvo com sucesso em: {pdf_path}")
 
-# Salvar o Excel na área de trabalho
-excel_path = os.path.join(desktop_path, "avaliacoes.xlsx")
+# Salvar o Excel na pasta Documentos
+excel_path = os.path.join(documents_path, "avaliacoes.xlsx")
 wb.save(excel_path)
 print(f"Excel salvo com sucesso em: {excel_path}")
 

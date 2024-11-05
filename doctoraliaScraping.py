@@ -1,62 +1,132 @@
 import os
-import requests
-from bs4 import BeautifulSoup
-from fpdf import FPDF
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
+from openpyxl import Workbook
 
-# Função para garantir que o texto seja codificado corretamente
-def safe_text(text):
-    return text.encode('latin-1', 'replace').decode('latin-1')
+# Início do rastreamento do tempo de execução
+start_time = time.time()
+
+# Configuração do Selenium
+options = webdriver.ChromeOptions()
+driver = webdriver.Chrome(options=options)
 
 # URL do site com as avaliações
-url = 'https://www.doctoralia.com.br/clinicas/hospital-marcelino-champagnat#facility-opinion-stats'
+url = 'https://www.doctoralia.com.br/clinicas/hospital-erasto-gaertner'
+driver.get(url)
 
-# Cabeçalho HTTP
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-}
+# Aguardar o carregamento inicial da página
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'floating-cookie-info-btn')))
 
-# Fazer a requisição à página
-response = requests.get(url, headers=headers)
+# Função para fechar o pop-up de cookies
+def close_cookie_popup():
+    try:
+        cookie_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, 'floating-cookie-info-btn'))
+        )
+        cookie_button.click()
+        print("Pop-up de cookies fechado.")
+    except TimeoutException:
+        print("Nenhum pop-up de cookies encontrado.")
 
-# Verificar se a requisição foi bem-sucedida
-if response.status_code == 200:
-    # Criar o objeto BeautifulSoup para análise do HTML
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    # Encontrar todas as avaliações dentro do elemento "media opinion text-break"
-    avaliacoes = soup.find_all('div', class_='media opinion text-break')
-    
-    # Criar um objeto PDF
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    
-    # Definir a fonte
-    pdf.set_font("Arial", size=12)
-    
+# Função para carregar todas as avaliações
+def load_all_reviews(max_reviews):
+    close_cookie_popup()  # Tentar fechar o pop-up de cookies uma vez no início
+    loaded_reviews = 0  # Contador de avaliações carregadas
+
+    while loaded_reviews < max_reviews:
+        try:
+            # Tentar encontrar o botão "Veja mais" usando o atributo data-id
+            see_more_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-id="load-more-opinions"]'))
+            )
+            # Forçar clique usando JavaScript para evitar o problema de interceptação
+            driver.execute_script("arguments[0].click();", see_more_button)
+            print("Botão 'Veja mais' clicado para carregar mais avaliações.")
+            time.sleep(1)  # Espera reduzida para o carregamento de novas avaliações
+            loaded_reviews += 10  # Atualize com o número esperado de avaliações carregadas por clique
+
+        except (TimeoutException, ElementClickInterceptedException):
+            print("Final da página alcançado ou botão 'Veja mais' não encontrado.")
+            break
+
+# Carregar todas as avaliações até o limite definido
+max_reviews = 50  # Defina o limite de avaliações aqui
+load_all_reviews(max_reviews)
+
+# Localizar os elementos de avaliação
+avaliacoes = driver.find_elements(By.CLASS_NAME, 'media.text-break')
+
+# Verificar se há avaliações para exportar
+if avaliacoes:
+    # Criar uma nova planilha Excel
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Avaliações"
+
+    # Adicionar cabeçalhos
+    sheet.append(["Nome", "Nota", "Comentário", "Resposta do Médico"])
+
     # Percorrer cada avaliação e extrair as informações
+    review_count = 0  # Contador de avaliações no Excel
+
     for avaliacao in avaliacoes:
-        # Nome do paciente usando itemprop="name"
-        nome = avaliacao.find('span', itemprop='name').text.strip() if avaliacao.find('span', itemprop='name') else 'Nome não encontrado'
-        
-        # Nota do paciente (ajustar com a classe correta, se necessário)
-        nota = avaliacao.find('span', class_='star-rating__rating').text.strip() if avaliacao.find('span', class_='star-rating__rating') else 'Nota não encontrada'
-        
-        # Comentário do paciente usando itemprop="description"
-        comentario = avaliacao.find('p', itemprop='description').text.strip() if avaliacao.find('p', itemprop='description') else 'Comentário não encontrado'
+        if review_count >= max_reviews:
+            break  # Parar se atingir o limite máximo de avaliações
 
-        # Escrever no PDF (convertendo o texto para o encoding correto)
-        pdf.cell(200, 10, txt=safe_text(f"Nome: {nome}"), ln=True, align='L')
-        pdf.cell(200, 10, txt=safe_text(f"Nota: {nota}"), ln=True, align='L')
-        pdf.multi_cell(200, 10, txt=safe_text(f"Comentário: {comentario}"), align='L')
-        pdf.cell(200, 10, txt=safe_text('-' * 40), ln=True, align='L')
-    
-    # Caminho para salvar o arquivo na área de trabalho
-    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "avaliacoes.pdf")
-    
-    # Salvar o PDF na área de trabalho
-    pdf.output(desktop_path)
-    print(f"PDF salvo com sucesso em: {desktop_path}")
+        nome = 'Nome não encontrado'
+        nota = 'Nota não encontrada'
+        comentario = 'Comentário não encontrado'
+        resposta_medico = 'Resposta do médico não encontrada'
 
+        try:
+            nome_tag = avaliacao.find_element(By.CSS_SELECTOR, 'span[itemprop="name"]')
+            nome = nome_tag.text.strip()
+        except NoSuchElementException:
+            pass
+        
+        try:
+            nota_tag = avaliacao.find_element(By.CSS_SELECTOR, '[data-score]')
+            nota = nota_tag.get_attribute("data-score")
+        except NoSuchElementException:
+            pass
+        
+        try:
+            comentario_tag = avaliacao.find_element(By.CSS_SELECTOR, 'p[itemprop="description"]')
+            comentario = comentario_tag.text.strip()
+        except NoSuchElementException:
+            pass
+
+        # Tentar extrair a resposta do médico dentro da div com a classe "card-body pb-1"
+        try:
+            resposta_medico_div = avaliacao.find_element(By.CLASS_NAME, 'card-body.pb-1')
+            # Selecionar apenas o elemento <p> sem classe
+            resposta_medico_tag = resposta_medico_div.find_element(By.XPATH, "./p[not(@class)]")
+            resposta_medico = resposta_medico_tag.text.strip()
+        except NoSuchElementException:
+            pass
+
+        # Adicionar os dados extraídos em uma nova linha na planilha
+        sheet.append([nome, nota, comentario, resposta_medico])
+
+        review_count += 1  # Incrementar o contador de avaliações
+
+    # Caminho para salvar o arquivo Excel na área de trabalho
+    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "avaliacoes.xlsx")
+
+    # Salvar o arquivo Excel na área de trabalho
+    workbook.save(desktop_path)
+    print(f"Arquivo Excel salvo com sucesso em: {desktop_path}")
 else:
-    print(f"Erro ao acessar a página: {response.status_code}")
+    print("Nenhuma avaliação encontrada.")
+
+# Fechar o driver
+# driver.quit()
+
+# Fim do rastreamento do tempo de execução
+end_time = time.time()
+execution_time = end_time - start_time
+print(f"Tempo total de execução: {execution_time:.2f} segundos")
