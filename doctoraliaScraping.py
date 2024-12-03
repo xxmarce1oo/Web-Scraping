@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -33,11 +34,10 @@ def close_cookie_popup():
         print("Nenhum pop-up de cookies encontrado.")
 
 # Função para carregar todas as avaliações
-def load_all_reviews(max_reviews):
+def load_all_reviews():
     close_cookie_popup()  # Tentar fechar o pop-up de cookies uma vez no início
-    loaded_reviews = 0  # Contador de avaliações carregadas
 
-    while loaded_reviews < max_reviews:
+    while True:
         try:
             # Tentar encontrar o botão "Veja mais" usando o atributo data-id
             see_more_button = WebDriverWait(driver, 5).until(
@@ -46,16 +46,14 @@ def load_all_reviews(max_reviews):
             # Forçar clique usando JavaScript para evitar o problema de interceptação
             driver.execute_script("arguments[0].click();", see_more_button)
             print("Botão 'Veja mais' clicado para carregar mais avaliações.")
-            time.sleep(1)  # Espera reduzida para o carregamento de novas avaliações
-            loaded_reviews += 10  # Atualize com o número esperado de avaliações carregadas por clique
+            time.sleep(2)  # Espera para o carregamento de novas avaliações
 
         except (TimeoutException, ElementClickInterceptedException):
             print("Final da página alcançado ou botão 'Veja mais' não encontrado.")
             break
 
-# Carregar todas as avaliações até o limite definido
-max_reviews = 50  # Defina o limite de avaliações aqui
-load_all_reviews(max_reviews)
+# Carregar todas as avaliações
+load_all_reviews()
 
 # Localizar os elementos de avaliação
 avaliacoes = driver.find_elements(By.CLASS_NAME, 'media.text-break')
@@ -68,19 +66,19 @@ if avaliacoes:
     sheet.title = "Avaliações"
 
     # Adicionar cabeçalhos
-    sheet.append(["Nome", "Nota", "Comentário", "Resposta do Médico"])
+    sheet.append(["Nome", "Nota", "Comentário", "Resposta do Médico", "Data do Comentário", "Nome do Doutor", "Especialidade"])
 
     # Percorrer cada avaliação e extrair as informações
     review_count = 0  # Contador de avaliações no Excel
 
     for avaliacao in avaliacoes:
-        if review_count >= max_reviews:
-            break  # Parar se atingir o limite máximo de avaliações
-
         nome = 'Nome não encontrado'
         nota = 'Nota não encontrada'
         comentario = 'Comentário não encontrado'
         resposta_medico = 'Resposta do médico não encontrada'
+        data_comentario = 'Data não encontrada'
+        nome_doutor = 'Nome do doutor não encontrado'
+        especialidade = 'Especialidade não encontrada'
 
         try:
             nome_tag = avaliacao.find_element(By.CSS_SELECTOR, 'span[itemprop="name"]')
@@ -100,6 +98,20 @@ if avaliacoes:
         except NoSuchElementException:
             pass
 
+        try:
+            data_tag = avaliacao.find_element(By.CSS_SELECTOR, 'time[itemprop="datePublished"]')
+            data_comentario = data_tag.get_attribute("datetime")
+        except NoSuchElementException:
+            pass
+
+        try:
+            doutor_tag = avaliacao.find_element(By.CSS_SELECTOR, 'span.small.text-muted')
+            doutor_info = doutor_tag.text.strip().split(' • ')
+            nome_doutor = doutor_info[0]
+            especialidade = doutor_info[1] if len(doutor_info) > 1 else 'Especialidade não encontrada'
+        except NoSuchElementException:
+            pass
+
         # Tentar extrair a resposta do médico dentro da div com a classe "card-body pb-1"
         try:
             resposta_medico_div = avaliacao.find_element(By.CLASS_NAME, 'card-body.pb-1')
@@ -110,12 +122,13 @@ if avaliacoes:
             pass
 
         # Adicionar os dados extraídos em uma nova linha na planilha
-        sheet.append([nome, nota, comentario, resposta_medico])
+        sheet.append([nome, nota, comentario, resposta_medico, data_comentario, nome_doutor, especialidade])
 
         review_count += 1  # Incrementar o contador de avaliações
 
-    # Caminho para salvar o arquivo Excel na área de trabalho
-    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", "avaliacoes.xlsx")
+    # Caminho para salvar o arquivo Excel na área de trabalho com timestamp
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", f"avaliacoes_{timestamp}.xlsx")
 
     # Salvar o arquivo Excel na área de trabalho
     workbook.save(desktop_path)
@@ -124,7 +137,7 @@ else:
     print("Nenhuma avaliação encontrada.")
 
 # Fechar o driver
-# driver.quit()
+driver.quit()
 
 # Fim do rastreamento do tempo de execução
 end_time = time.time()
